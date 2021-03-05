@@ -38,6 +38,8 @@
 *
 *   compile: gcc -std=gnu99 -O3 -o rm756_hw2_code rm756_hw2_code.c -lpthread -lm
 *   run: ./rm756_hw2_code
+*   NOTE: for matrix inversion, set MIN_DIM = MAX_DIM = Nrhs
+*         for solving linear system of equations, set Nrhs = 1
 *
 *   alternatively use input from the command line and run as
 *        ./my_pt_gauss #1 #2 where
@@ -54,11 +56,11 @@
 #include "pthreadbarrier.h"
 
 // set dimensions for testing
-# define MIN_DIM     1<<8        // min dimension of the matrices (was 1<<8)
-# define MAX_DIM     1<<13        // max dimension (was 1<<12)
+# define MIN_DIM     1<<8        // min dimension of the matrices (equal to MIN_DIM if Nrhs=1)
+# define MAX_DIM     1<<12        // max dimension (equal to MAX_DIM if Nrhs=1)
 # define MIN_THRS    1           // min size of a tile
 # define MAX_THRS    8           // max size of a tile
-# define Nrhs        1           // number of rhs vectors (was 256)
+# define Nrhs        8         // number of rhs vectors (set to MIN_DIM)
 # define BILLION 1000000000L
 
 // can be used when N is not divisible by num_thrs
@@ -156,7 +158,9 @@ int main(int argc, char *argv[]) {
       // populate A and b so the solution x is all 1s
       data_A_b(N,A,b);
 
-      // print_arr(A, 8, 8);
+      printf("\nmatrix dimension: %d, number of threads: %d\n", N, num_thrs);
+
+      print_arr(A, 8, 8);
       // print_arr(b, 8, Nrhs);
 
       // start timer
@@ -181,8 +185,8 @@ int main(int argc, char *argv[]) {
                     + 1000 * (end.tv_usec - start.tv_usec);
       float difft_s = diff / BILLION;
 
-      printf("\nmatrix dimension: %d, number of threads: %d\n", N, num_thrs);
-      // printf("elapsed time (s) for triangularization: %.4f\n", diff_s);
+      // printf("\nmatrix dimension: %d, number of threads: %d\n", N, num_thrs);
+      // printf("elapsed time (s) for triangularization: %.4f\n", difft_s);
       // print_arr(A, 8, 8);
       // printf("vector b before:\n");
       // print_arr(b, 8, Nrhs);
@@ -208,8 +212,8 @@ int main(int argc, char *argv[]) {
       // stop timer
       gettimeofday(&end, NULL);
 
-      // printf("Solution vector x:\n");
-      // print_arr(x, 8, Nrhs);
+      printf("Solution vector x:\n");
+      print_arr(x, 8, 8);
       // printf("vector b after:\n");
       // print_arr(b, 8, Nrhs);
 
@@ -398,11 +402,11 @@ void *backSolve(void *arg){
   for(k= myid;k < Nrhs; k += thrs_used){  // loop over # rhs
     // printf("using thread %d", myid);
     for (int i = N - 1; i >= 0; i--) {
-      x[i][0] = b[i][0];
+      x[i][k] = b[i][k];
       for (int j = i + 1; j < N; j++) {
-        x[i][0] = x[i][0] - (x[j][0] * A[i][j]);
+        x[i][k] = x[i][k] - (x[j][k] * A[i][j]);
       }
-      x[i][0] = x[i][0] / A[i][i];
+      x[i][k] = x[i][k] / A[i][i];
     }
   }
 }
