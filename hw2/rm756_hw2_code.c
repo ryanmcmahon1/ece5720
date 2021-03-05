@@ -54,8 +54,8 @@
 #include "pthreadbarrier.h"
 
 // set dimensions for testing
-# define MIN_DIM     1<<8        // min dimension of the matrices
-# define MAX_DIM     1<<10        // max dimension
+# define MIN_DIM     1<<8        // min dimension of the matrices (was 1<<8)
+# define MAX_DIM     1<<13        // max dimension (was 1<<12)
 # define MIN_THRS    1           // min size of a tile
 # define MAX_THRS    8           // max size of a tile
 # define Nrhs        1           // number of rhs vectors (was 256)
@@ -68,7 +68,8 @@ void data_A_b(int N, float** A, float** b);            // create data
 void *triangularize(void *arg);                        // triangularization
 // void triangularize();
 void *backSolve(void *arg);                            // backsubstitution
-float error_check(float** A, float** x, float** b, int N, int nrhs, float res_error);       // check residual ||A*x-b||_2
+// void backSolve();
+float error_check(float** A, float** x, float** b, int N, int nrhs);       // check residual ||A*x-b||_2
 void print_arr(float** arr, int rows, int cols);
 
 pthread_barrier_t barrier;   // used to synchronize threads
@@ -113,6 +114,13 @@ int main(int argc, char *argv[]) {
       // redefined after each pass in the num_thrs loop
       pthread_t thread[num_thrs];
       pthread_barrier_init(&barrier, NULL, num_thrs);
+      // int nrhs;
+      // if (Nrhs > 1) {
+      //   nrhs = N;
+      // }
+      // else {
+      //   nrhs
+      // }
       void *status;
 
       // Allocate memory for A
@@ -152,6 +160,7 @@ int main(int argc, char *argv[]) {
       // print_arr(b, 8, Nrhs);
 
       // start timer
+      gettimeofday(&start, NULL);
 
       // activate threads for triangularization of A and update of b
       for (ii = 0; ii < num_thrs; ii++) {
@@ -163,39 +172,59 @@ int main(int argc, char *argv[]) {
       for (ii = 0; ii < num_thrs; ii++) {
         pthread_join(thread[ii], &status);
       }
-      printf("\nmatrix dimension: %d, number of threads: %d\n", N, num_thrs);
-      print_arr(A, 8, 8);
 
       // stop timer
+      gettimeofday(&end, NULL);
 
-      // get triangularization execution time 
+      // get triangularization execution time
+      float diff = BILLION * (end.tv_sec - start.tv_sec)
+                    + 1000 * (end.tv_usec - start.tv_usec);
+      float difft_s = diff / BILLION;
+
+      printf("\nmatrix dimension: %d, number of threads: %d\n", N, num_thrs);
+      // printf("elapsed time (s) for triangularization: %.4f\n", diff_s);
+      // print_arr(A, 8, 8);
+      // printf("vector b before:\n");
+      // print_arr(b, 8, Nrhs);
 
       // barrier synchronization (not necessary)
 
       // write execution time to the file
 
       // backsubstitution, A is now upper triangular, b has changed too
+      gettimeofday(&start, NULL);
 
       // activate threads for backsubstitution 
+      for (ii = 0; ii < num_thrs; ii++) {
+        pthread_create(&thread[ii], NULL, backSolve, (void *) &index[ii]);
+      }
+      // backSolve();
 
       // terminate threads
+      for (ii = 0; ii < num_thrs; ii++) {
+        pthread_join(thread[ii], &status);
+      }
 
       // stop timer
+      gettimeofday(&end, NULL);
 
-      /* sanity check, to see whether the right solution is found
-            if (N <= 8){
-              printf("printing x...\n");
-              for(i=0;i<Nrhs;i++){
-                for(j=0;j<N;j++)
-                printf("%10.2e",x[i][j]);
-              printf("\n");
-            }
-        }
-      */
+      // printf("Solution vector x:\n");
+      // print_arr(x, 8, Nrhs);
+      // printf("vector b after:\n");
+      // print_arr(b, 8, Nrhs);
 
       // get the total execution time
+      diff = BILLION * (end.tv_sec - start.tv_sec)
+                    + 1000 * (end.tv_usec - start.tv_usec);
+      float diffb_s = diff / BILLION;
+      el_time = difft_s + diffb_s; // total elapsed time is triangularization time
+                                   // plus backsubstitution time
+      // printf("elapsed time (s): %.4f\n", el_time);
+    
 
-      // check the residual error
+      // check the residual error 
+      // float err = error_check(A, x, b, N, Nrhs);
+      // printf("total elapsed time: %.4f, error: %.3f\n", el_time, err);
 
       // free(A); free(b); free(x);
 
@@ -349,33 +378,86 @@ void* triangularize(void *arg) {
   return 0;
 }
 
-// void *backSolve(void *arg){
-//   int myid = *((int*)arg);
+void *backSolve(void *arg){
+// void backSolve() {
+  int myid = *((int*)arg);
+  int k = 0;
 
-// // copy global thread_data to local data
+  // copy global thread_data to local data
+  float** A = thread_data.A;
+  float** b = thread_data.b;
+  float** x = thread_data.x;
+  int thrs_used = thread_data.thrs_used;
+  int N = thread_data.N;
 
-// // thread myid performs backsubstitution for Nrhs/thrs_used rhs
-// // column cyclic distribution
+  // thread myid performs backsubstitution for Nrhs/thrs_used rhs
+  // column cyclic distribution
+   
+  // if Nrhs > 1, split up the work evenly among threads
+  // if Nrhs = 1, have thread 0 do the work 
+  for(k= myid;k < Nrhs; k += thrs_used){  // loop over # rhs
+    // printf("using thread %d", myid);
+    for (int i = N - 1; i >= 0; i--) {
+      x[i][0] = b[i][0];
+      for (int j = i + 1; j < N; j++) {
+        x[i][0] = x[i][0] - (x[j][0] * A[i][j]);
+      }
+      x[i][0] = x[i][0] / A[i][i];
+    }
+  }
+}
 
-//   for(k= myid;k < nrhs; k += thrs_used){  // loop over # rhs
+// float error_check(float** A, float** x, float** b, int N, int nrhs){
+//   int i, j, k;
 
-//     /* your backsubstitution code */ 
-
+//   /************************************************************************ 
+//    * compute residual r = b - A*x, compute ||r||_2 = sqrt(sum_i(r[i]*r[i]))
+//    * compute ||x||_2 = sqrt(sum_i(x[i]*x[i])), 
+//    * ||A||_F = sqrt(sum_i(sum_j(a[i][j]*a[i][j])))
+//    * compute normalized residual error res_error 
+//    *   res_error =  ||r||_2/(||A||_F*||x||_2)
+//    * in single precision it should be close to 1.0e-6
+//    * in double precision it should be close to 1.0e-15
+//    *************************************************************************/
+//   // multiply A and x
+//   float r[N][nrhs];
+//   for (i = 0; i < N; i++) {
+//     for (j = 0; j < nrhs; j++) {
+//       for (k = 0; k < N; k++) {
+//         r[i][j] += A[i][k] * x[k][j];
+//       }
 //     }
-// }
+//   }
+  
+//   print_arr(r, 8, nrhs);
+  
+//   // calculating norm of residual vector r
+//   float r2_norm = 0;
+//   for (i = 0; i < N; i++) {
+//     // r = Ax - b
+//     // r[i] = r[i] - b[i][0];
+//     r2_norm += r[i][0] * r[i][0];
+//   }
+//   r2_norm = sqrtf(r2_norm);
 
-// float error_check(float** A, float** x, float** b, int N, int nrhs, float res_error){
+//   // norm of A
+//   float A_norm = 0;
+//   for (i = 0; i < N; i++) {
+//     for (j = 0; j < N; j++) {
+//       A_norm += A[i][j] * A[i][j];
+//     }
+//   }
 
-// /************************************************************************ 
-//  * compute residual r = b - A*x, compute ||r||_2 = sqrt(sum_i(r[i]*r[i]))
-//  * compute ||x||_2 = sqrt(sum_i(x[i]*x[i])), 
-//  * ||A||_F = sqrt(sum_i(sum_j(a[i][j]*a[i][j])))
-//  * compute normalized residual error res_error 
-//  *   res_error =  ||r||_2/(||A||_F*||x||_2)
-//  * in single precision it should be close to 1.0e-6
-//  * in double precision it should be close to 1.0e-15
-//  *************************************************************************/
+//   // norm of b
+//   float x_norm = 0;
+//   for (i = 0; i < N; i++) {
+//     for (j = 0; j < nrhs; j++) {
+//       x_norm += x[i][j] * x[i][j];
+//     }
+//   }
+//   x_norm = sqrtf(x_norm);
+//   printf("\nr = %f, A = %f, x = %f\n", r2_norm, A_norm, x_norm);
 
-//    return res_error*
+//   return r2_norm / (A_norm * x_norm);
 // }
 
