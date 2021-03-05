@@ -55,7 +55,7 @@
 
 // set dimensions for testing
 # define MIN_DIM     1<<8        // min dimension of the matrices
-# define MAX_DIM     1<<8        // max dimension
+# define MAX_DIM     1<<10        // max dimension
 # define MIN_THRS    1           // min size of a tile
 # define MAX_THRS    8           // max size of a tile
 # define Nrhs        1           // number of rhs vectors (was 256)
@@ -163,6 +163,7 @@ int main(int argc, char *argv[]) {
       for (ii = 0; ii < num_thrs; ii++) {
         pthread_join(thread[ii], &status);
       }
+      printf("\nmatrix dimension: %d, number of threads: %d\n", N, num_thrs);
       print_arr(A, 8, 8);
 
       // stop timer
