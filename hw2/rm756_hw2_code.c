@@ -60,7 +60,8 @@
 # define MAX_DIM     1<<12        // max dimension (equal to MAX_DIM if Nrhs=1)
 # define MIN_THRS    1           // min size of a tile
 # define MAX_THRS    8           // max size of a tile
-# define Nrhs        8         // number of rhs vectors (set to MIN_DIM)
+# define Nrhs        1
+         // number of rhs vectors (set to MIN_DIM)
 # define BILLION 1000000000L
 
 // can be used when N is not divisible by num_thrs
@@ -116,14 +117,17 @@ int main(int argc, char *argv[]) {
       // redefined after each pass in the num_thrs loop
       pthread_t thread[num_thrs];
       pthread_barrier_init(&barrier, NULL, num_thrs);
-      // int nrhs;
-      // if (Nrhs > 1) {
-      //   nrhs = N;
-      // }
-      // else {
-      //   nrhs
-      // }
       void *status;
+
+      int ncols = log2(MAX_DIM) - log2(MIN_DIM) + 1;
+      int nrows = log2(MAX_THRS) - log2(MIN_THRS);
+      float arr[nrows][ncols];
+  
+      for (int i = 0; i < nrows; i++) {
+        for (int j = 0; j < ncols; j++) {
+          arr[i][j] = 0;
+        }
+      }
 
       // Allocate memory for A
       float **A = (float **)malloc(N*sizeof(float*));
@@ -160,9 +164,6 @@ int main(int argc, char *argv[]) {
 
       printf("\nmatrix dimension: %d, number of threads: %d\n", N, num_thrs);
 
-      print_arr(A, 8, 8);
-      // print_arr(b, 8, Nrhs);
-
       // start timer
       gettimeofday(&start, NULL);
 
@@ -186,7 +187,7 @@ int main(int argc, char *argv[]) {
       float difft_s = diff / BILLION;
 
       // printf("\nmatrix dimension: %d, number of threads: %d\n", N, num_thrs);
-      // printf("elapsed time (s) for triangularization: %.4f\n", difft_s);
+      // printf("elapsed time (s) for triangularization: %.5f\n", difft_s);
       // print_arr(A, 8, 8);
       // printf("vector b before:\n");
       // print_arr(b, 8, Nrhs);
@@ -212,25 +213,24 @@ int main(int argc, char *argv[]) {
       // stop timer
       gettimeofday(&end, NULL);
 
-      printf("Solution vector x:\n");
-      print_arr(x, 8, 8);
-      // printf("vector b after:\n");
-      // print_arr(b, 8, Nrhs);
-
       // get the total execution time
       diff = BILLION * (end.tv_sec - start.tv_sec)
                     + 1000 * (end.tv_usec - start.tv_usec);
       float diffb_s = diff / BILLION;
       el_time = difft_s + diffb_s; // total elapsed time is triangularization time
                                    // plus backsubstitution time
-      // printf("elapsed time (s): %.4f\n", el_time);
+      // printf("elapsed time (s) for backsubstitution: %.5f\n", diffb_s);
+      // printf("total elapsed time (s): %.5f\n", el_time);
+      int ln = log2(N) - log2(MIN_DIM);
+      int lt = log2(num_thrs) - log2(num_thrs);
+      arr[lt][ln] = el_time;
     
 
       // check the residual error 
-      // float err = error_check(A, x, b, N, Nrhs);
-      // printf("total elapsed time: %.4f, error: %.3f\n", el_time, err);
+      float err = error_check(A, x, b, N, Nrhs);
+      printf("error: %8.2e\n", err); // commented out for submission
 
-      // free(A); free(b); free(x);
+      // free(A); free(b); free(x);// write data from 2d array into .csv file
 
     } // end of num_thrs loop <-------------------
 
@@ -239,28 +239,7 @@ int main(int argc, char *argv[]) {
 
   fclose(fp);
 
-/*
-*  Create one way pipe line with call to popen()
-*  need Gauss_solver.csv file and plot_gauss.gp file
-*/
-
-  FILE *tp = NULL;
-  if (( tp = popen("gnuplot plot_gauss.gp", "w")) == NULL)
-  {
-    perror("popen");
-    exit(1);
-  }
-// Close the pipe
-  pclose(tp);
-
-// this part is for Mac OS only, do not use under linux
-  FILE *fpo = NULL;
-  if (( fpo = popen("open gauss_plots.eps", "w")) == NULL)
-  {
-    perror("popen");
-    exit(1);
-  }
-  pclose(fpo);
+  // NOTE: I used other program to plot results
 
   return 0;
 }
@@ -411,57 +390,62 @@ void *backSolve(void *arg){
   }
 }
 
-// float error_check(float** A, float** x, float** b, int N, int nrhs){
-//   int i, j, k;
+float error_check(float** A, float** x, float** b, int N, int nrhs){
+  int i, j, k, q;
 
-//   /************************************************************************ 
-//    * compute residual r = b - A*x, compute ||r||_2 = sqrt(sum_i(r[i]*r[i]))
-//    * compute ||x||_2 = sqrt(sum_i(x[i]*x[i])), 
-//    * ||A||_F = sqrt(sum_i(sum_j(a[i][j]*a[i][j])))
-//    * compute normalized residual error res_error 
-//    *   res_error =  ||r||_2/(||A||_F*||x||_2)
-//    * in single precision it should be close to 1.0e-6
-//    * in double precision it should be close to 1.0e-15
-//    *************************************************************************/
-//   // multiply A and x
-//   float r[N][nrhs];
-//   for (i = 0; i < N; i++) {
-//     for (j = 0; j < nrhs; j++) {
-//       for (k = 0; k < N; k++) {
-//         r[i][j] += A[i][k] * x[k][j];
-//       }
-//     }
-//   }
+  /************************************************************************ 
+   * compute residual r = b - A*x, compute ||r||_2 = sqrt(sum_i(r[i]*r[i]))
+   * compute ||x||_2 = sqrt(sum_i(x[i]*x[i])), 
+   * ||A||_F = sqrt(sum_i(sum_j(a[i][j]*a[i][j])))
+   * compute normalized residual error res_error 
+   *   res_error =  ||r||_2/(||A||_F*||x||_2)
+   * in single precision it should be close to 1.0e-6
+   * in double precision it should be close to 1.0e-15
+   *************************************************************************/
+  // multiply A and x
+  float **r = (float **)malloc(N*sizeof(float*));
+  for (q=0; q < N; q++)
+    r[q] = (float*)malloc(Nrhs*sizeof(float));
+  // printf("\n eep eep \n");
+
+  for (i = 0; i < N; i++) {
+    for (j = 0; j < Nrhs; j++) {
+      for (k = 0; k < N; k++) {
+        // printf("\n%d, %d, %d\n", i, j, k);
+        r[i][j] += A[i][k] * x[k][j];
+      }
+    }
+  }
   
-//   print_arr(r, 8, nrhs);
+  // print_arr(r, 8, nrhs);
   
-//   // calculating norm of residual vector r
-//   float r2_norm = 0;
-//   for (i = 0; i < N; i++) {
-//     // r = Ax - b
-//     // r[i] = r[i] - b[i][0];
-//     r2_norm += r[i][0] * r[i][0];
-//   }
-//   r2_norm = sqrtf(r2_norm);
+  // calculating norm of residual vector r
+  float r2_norm = 0;
+  for (i = 0; i < N; i++) {
+    // r = Ax - b
+    r[i][0] = r[i][0] - b[i][0];
+    r2_norm += r[i][0] * r[i][0];
+  }
+  r2_norm = sqrtf(r2_norm);
 
-//   // norm of A
-//   float A_norm = 0;
-//   for (i = 0; i < N; i++) {
-//     for (j = 0; j < N; j++) {
-//       A_norm += A[i][j] * A[i][j];
-//     }
-//   }
+  // norm of A
+  float A_norm = 0;
+  for (i = 0; i < N; i++) {
+    for (j = 0; j < N; j++) {
+      A_norm += A[i][j] * A[i][j];
+    }
+  }
 
-//   // norm of b
-//   float x_norm = 0;
-//   for (i = 0; i < N; i++) {
-//     for (j = 0; j < nrhs; j++) {
-//       x_norm += x[i][j] * x[i][j];
-//     }
-//   }
-//   x_norm = sqrtf(x_norm);
-//   printf("\nr = %f, A = %f, x = %f\n", r2_norm, A_norm, x_norm);
+  // norm of b
+  float x_norm = 0;
+  for (i = 0; i < N; i++) {
+    for (j = 0; j < nrhs; j++) {
+      x_norm += x[i][j] * x[i][j];
+    }
+  }
+  x_norm = sqrtf(x_norm);
+  // printf("\nr = %f, A = %f, x = %f\n", r2_norm, A_norm, x_norm);
 
-//   return r2_norm / (A_norm * x_norm);
-// }
+  return r2_norm / (A_norm * x_norm);
+}
 
