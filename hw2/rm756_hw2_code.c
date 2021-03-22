@@ -162,7 +162,7 @@ int main(int argc, char *argv[]) {
       // populate A and b so the solution x is all 1s
       data_A_b(N,A,b);
 
-      printf("\nmatrix dimension: %d, number of threads: %d\n", N, num_thrs);
+      // printf("\nmatrix dimension: %d, number of threads: %d\n", N, num_thrs);
 
       // start timer
       gettimeofday(&start, NULL);
@@ -171,7 +171,6 @@ int main(int argc, char *argv[]) {
       for (ii = 0; ii < num_thrs; ii++) {
         pthread_create(&thread[ii], NULL, triangularize, (void *) &index[ii]);
       }
-      // triangularize();
 
       // terminate threads (join)
       for (ii = 0; ii < num_thrs; ii++) {
@@ -186,16 +185,6 @@ int main(int argc, char *argv[]) {
                     + 1000 * (end.tv_usec - start.tv_usec);
       float difft_s = diff / BILLION;
 
-      // printf("\nmatrix dimension: %d, number of threads: %d\n", N, num_thrs);
-      // printf("elapsed time (s) for triangularization: %.5f\n", difft_s);
-      // print_arr(A, 8, 8);
-      // printf("vector b before:\n");
-      // print_arr(b, 8, Nrhs);
-
-      // barrier synchronization (not necessary)
-
-      // write execution time to the file
-
       // backsubstitution, A is now upper triangular, b has changed too
       gettimeofday(&start, NULL);
 
@@ -203,7 +192,6 @@ int main(int argc, char *argv[]) {
       for (ii = 0; ii < num_thrs; ii++) {
         pthread_create(&thread[ii], NULL, backSolve, (void *) &index[ii]);
       }
-      // backSolve();
 
       // terminate threads
       for (ii = 0; ii < num_thrs; ii++) {
@@ -219,8 +207,6 @@ int main(int argc, char *argv[]) {
       float diffb_s = diff / BILLION;
       el_time = difft_s + diffb_s; // total elapsed time is triangularization time
                                    // plus backsubstitution time
-      // printf("elapsed time (s) for backsubstitution: %.5f\n", diffb_s);
-      // printf("total elapsed time (s): %.5f\n", el_time);
       int ln = log2(N) - log2(MIN_DIM);
       int lt = log2(num_thrs) - log2(num_thrs);
       arr[lt][ln] = el_time;
@@ -228,7 +214,7 @@ int main(int argc, char *argv[]) {
 
       // check the residual error 
       float err = error_check(A, x, b, N, Nrhs);
-      printf("error: %8.2e\n", err); // commented out for submission
+      // printf("error: %8.2e\n", err); // commented out for submission
 
       // free(A); free(b); free(x);// write data from 2d array into .csv file
 
@@ -444,7 +430,6 @@ float error_check(float** A, float** x, float** b, int N, int nrhs){
     }
   }
   x_norm = sqrtf(x_norm);
-  // printf("\nr = %f, A = %f, x = %f\n", r2_norm, A_norm, x_norm);
 
   return r2_norm / (A_norm * x_norm);
 }
