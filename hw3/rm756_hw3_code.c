@@ -13,7 +13,7 @@
 // run: ./rm756_hw3_code
 
 #define SOFT 1e-2f
-#define NUM_BODY 5 /* the number of bodies                  */
+#define NUM_BODY 50 /* the number of bodies                  */
 #define MAX_X 90    /* the positions (x_i,y_i) are random    */
 #define MAX_Y 50 
 #define MIN_X 1     /* between MIN and MAX position          */
@@ -60,6 +60,7 @@ int main(const int argc, const char** argv) {
   Energy *e = (Energy*)Ebuf;
 
   /******************** (0) initialize N-body ******************/
+  // seeding random number generator so errors are reproducible
   srand(0);
   for (i = 0; i < nBodies; i++) {
     r[i].m  = (rand() % (MAX_M - MIN_M + 1)) + MIN_M;
@@ -79,7 +80,21 @@ int main(const int argc, const char** argv) {
   // printf("%f\n", e->ke);
 
   /******************** (3) Initial acceleration *****************/
-  bodyAcc(r, dt, nBodies);            
+  bodyAcc(r, dt, nBodies);
+
+  // force matrices (two needed for two dimensions)
+  double f_x[nBodies][nBodies]; // forces in x direction
+  double f_y[nBodies][nBodies]; // forces in y direction
+
+  double dx, dy, d, d3; // used for computing force m
+
+  // initializing all values to 0
+  for (int i = 0; i < nBodies; i++) {
+    for (int j = 0; j < nBodies; j++) {
+      f_x[i][j] = 0.0;
+      f_y[i][j] = 0.0;
+    }
+  }        
 
   totalTime = omp_get_wtime();
 
@@ -100,6 +115,31 @@ int main(const int argc, const char** argv) {
 
     // update acceleration
     // compute new force matrix
+    for (int i = 0; i < nBodies; i++) {
+      for (int j = i + 1; j < nBodies; j++) {
+        dx = r[i].x - r[j].x;
+        dy = r[i].y - r[j].y;
+        d = sqrtf((dx * dx) + (dy * dy) + SOFT); // SOFT added to avoid divide by 0
+        d3 = d * d * d;
+        f_x[i][j] = -G * r[i].m * r[j].m * (r[i].x - r[j].x) / d3;
+        f_y[i][j] = -G * r[i].m * r[j].m * (r[i].y - r[j].y) / d3;
+        f_x[j][i] = -f_x[i][j];
+        f_y[j][i] = -f_y[i][j]; // using symmetry of force matrix (Newton's law)
+      }
+    }
+
+    // calculate initial acceleration from force matrices
+    for (int i = 0; i < nBodies; i++) {
+      double Fx = 0.0, Fy = 0.0;
+      for (int j = 0; j < nBodies; j++) {
+        Fx += f_x[i][j];
+        Fy += f_y[i][j];
+      }
+      // printf("Force for particle %d: (%f, %f)\n", i, Fx, Fy);
+      // Using F = m * a, a = F / m
+      r[i].ax = Fx / r[i].m;
+      r[i].ay = Fy / r[i].m;
+    }
 
     // "half kick"
     for (i = 0; i < nBodies; i++) {
@@ -108,6 +148,10 @@ int main(const int argc, const char** argv) {
     }
 
     // record the position and velocity
+    printf("\nIteration %d\n", iter);
+    for (i = 0; i < nBodies; i++) {
+      printf("Position for particle %d: (%f, %f)\n", i, r[i].x, r[i].y);
+    }
 
     // sanity check
     total_energy(r, e, nBodies);
@@ -197,7 +241,8 @@ void total_energy(Body *r, Energy *e, int n){
 
 void bodyAcc(Body *r, double dt, int n) {
   // F = G*sum_{i,j} m_i*m_j*(r_j-r_i)/||r_j-r_i||^3
-  // F = m*a thus a = F/m // constructing initial force matrices (need 2 for 2 dimensions)
+  // F = m*a thus a = F/m 
+  // constructing force matrices (need 2 for 2 dimensions)
   double f_x[n][n]; // forces in x direction
   double f_y[n][n]; // forces in y direction
 
