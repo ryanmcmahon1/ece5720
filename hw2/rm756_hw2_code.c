@@ -1,5 +1,5 @@
 /***********************************************************************************  
-* Gaussian elimonation with partial pivoting on an N by N matrix
+* Gaussian elimination with partial pivoting on an N by N matrix
 *   (1) uses cyclic by row distribution for the elimination steps
 *   (2) only a single thread finds a pivot row and swaps it
 *       if necessary

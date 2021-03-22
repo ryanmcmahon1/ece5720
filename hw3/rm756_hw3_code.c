@@ -73,6 +73,7 @@ int main(const int argc, const char** argv) {
 
   /******************** (2) Get total energy *********************/
   total_energy(r, e, nBodies);
+  printf("%f\n", e->ke);
 
   /******************** (3) Initial acceleration *****************/
   bodyAcc(r, dt, nBodies);            
@@ -170,12 +171,12 @@ void total_energy(Body *r, Energy *e, int n){
   double ke = 0.0, pe = 0.0;
 
   for (int i = 0; i < n; i++) {
-    double v = sqrtf((r[i].vx * r[i].vx) + (r[i].vy * r[i].vy))
+    double v = sqrtf((r[i].vx * r[i].vx) + (r[i].vy * r[i].vy));
     ke += r[i].m * v * v;
   }
 
   e->ke = ke / 2;
-  // e->pe = 
+  e->pe = 0;
 }
 
 void bodyAcc(Body *r, double dt, int n) {
