@@ -8,6 +8,10 @@
 // https://www.geeksforgeeks.org/generating-random-number-range-c/
 // -for random number generation in a range
 
+// compile: gcc -std=gnu99 -O3 -o rm756_hw3_code rm756_hw3_code.c -fopenmp -lm
+// debug: gcc -std=gnu99 -O0 -o rm756_hw3_code rm756_hw3_code.c -fopenmp -lm -g
+// run: ./rm756_hw3_code
+
 #define SOFT 1e-2f
 #define NUM_BODY 50 /* the number of bodies                  */
 #define MAX_X 90    /* the positions (x_i,y_i) are random    */
@@ -35,7 +39,7 @@ int main(const int argc, const char** argv) {
 
   // record positions and velocities
   FILE *pvp = NULL;            
-  tp = fopen("pos_vel.txt", "w");
+  pvp = fopen("pos_vel.txt", "w");
 
   // file to record energy (to check for correctness)
   FILE *tp = NULL;            
@@ -43,25 +47,25 @@ int main(const int argc, const char** argv) {
   
   int i;
   int nBodies = NUM_BODY;
-  nBodies = atoi(argv[1]);
+  // nBodies = atoi(argv[1]);
 
   const double dt = 0.01f; // time step
   const int nIters = 1000;  // simulation iterations
   double totalTime, avgTime;
 
   double *Bbuf = (double*)malloc(nBodies*sizeof(Body));
-  double *Ebuf = (double*)malloc(Energy);
+  double *Ebuf = (double*)malloc(sizeof(Energy));
   Body *r = (Body*) Bbuf;
   Energy *e = (Energy*)Ebuf;
 
   /******************** (0) initialize N-body ******************/
   srand(0);
   for (i = 0; i < nBodies; i++) {
-    r[i].m  = ((double)rand() % (MAX_M - MIN_M + 1)) + MIN_M;
-    r[i].x  = ((double)rand() % (MAX_X - MIN_X + 1)) + MIN_X;
-    r[i].y  = ((double)rand() % (MAX_Y - MIN_Y + 1)) + MIN_Y;
-    r[i].vx = ((double)rand() % (MAX_V - MIN_V + 1)) + MIN_V;
-    r[i].vy = ((double)rand() % (MAX_V - MIN_V + 1)) + MIN_V;
+    r[i].m  = (rand() % (MAX_M - MIN_M + 1)) + MIN_M;
+    r[i].x  = (rand() % (MAX_X - MIN_X + 1)) + MIN_X;
+    r[i].y  = (rand() % (MAX_Y - MIN_Y + 1)) + MIN_Y;
+    r[i].vx = (rand() % (MAX_V - MIN_V + 1)) + MIN_V;
+    r[i].vy = (rand() % (MAX_V - MIN_V + 1)) + MIN_V;
   }
 
   /******************** (1) Get center of mass *******************/
@@ -137,30 +141,40 @@ void center_of_momentum(Body *r, int n){
   https://en.wikipedia.org/wiki/N-body_problem
   https://en.wikipedia.org/wiki/Center-of-momentum_frame
   */
-  
+
   // calculating total mass and x/y momentum 
   double total_mass = 0.0, x_momentum = 0.0, y_momentum = 0.0;
   for (int i = 0; i < n; i++) {
-    total_mass += r[n].m;
-    x_momentum += r[n].m * r[n].vx;
-    y_momentum += r[n].m * r[n].vy;
+    total_mass += r[i].m;
+    x_momentum += r[i].m * r[i].vx;
+    y_momentum += r[i].m * r[i].vy;
   }
 
   // calculating Vc
   double Vc_x = x_momentum / total_mass;
   double Vc_y = y_momentum / total_mass;
 
+  // printf("%f,%f", Vc_x, Vc_y);
+
   // applying the transformation v' = v - Vc to each particle
   for (int i = 0; i < n; i++) {
-    r[n].vx = r[n].vx - Vc_x;
-    r[n].vy = r[n].vy - Vc_y;
+    r[i].vx = r[i].vx - Vc_x;
+    r[i].vy = r[i].vy - Vc_y;
   }
 }
 
 void total_energy(Body *r, Energy *e, int n){
   // kinetic energy, (*e).ke = m*v^2/2;
   // potential energy : (*e).pe = -\sum_{1\leq i < j \leq N}G*m_i*m_j/||r_j-r_i||
-  // e->ke = 
+
+  double ke = 0.0, pe = 0.0;
+
+  for (int i = 0; i < n; i++) {
+    double v = sqrtf((r[i].vx * r[i].vx) + (r[i].vy * r[i].vy))
+    ke += r[i].m * v * v;
+  }
+
+  e->ke = ke / 2;
   // e->pe = 
 }
 
