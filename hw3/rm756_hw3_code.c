@@ -13,7 +13,7 @@
 // run: ./rm756_hw3_code
 
 #define SOFT 1e-2f
-#define NUM_BODY 50 /* the number of bodies                  */
+#define NUM_BODY 5 /* the number of bodies                  */
 #define MAX_X 90    /* the positions (x_i,y_i) are random    */
 #define MAX_Y 50 
 #define MIN_X 1     /* between MIN and MAX position          */
@@ -31,6 +31,7 @@ typedef struct { double x, y, vx, vy, ax, ay, m; } Body;
 // kinetic and potential energy
 typedef struct { double ke, pe; } Energy;
 
+void print_arr(double arr[NUM_BODY][NUM_BODY], int rows, int cols);
 void bodyAcc(Body *r, double dt, int n);      // computes  a
 void total_energy(Body *r, Energy *e, int n); // kinetic and potential
 void center_of_momentum(Body *r, int n);      // center of momentum
@@ -45,7 +46,7 @@ int main(const int argc, const char** argv) {
   FILE *tp = NULL;            
   tp = fopen("plot_nbody.csv", "w");
   
-  int i;
+  int i, j;
   int nBodies = NUM_BODY;
   // nBodies = atoi(argv[1]);
 
@@ -70,10 +71,12 @@ int main(const int argc, const char** argv) {
 
   /******************** (1) Get center of mass *******************/
   center_of_momentum(r, nBodies);
-
+  for (i = 0; i < nBodies; i++) {
+    printf("Particle %d: Mass = %f, Position = (%f,%f), Velocity = (%f,%f)\n", i, r[i].m, r[i].x, r[i].y, r[i].vx, r[i].vy);
+  }
   /******************** (2) Get total energy *********************/
   total_energy(r, e, nBodies);
-  printf("%f\n", e->ke);
+  // printf("%f\n", e->ke);
 
   /******************** (3) Initial acceleration *****************/
   bodyAcc(r, dt, nBodies);            
@@ -84,12 +87,25 @@ int main(const int argc, const char** argv) {
   for (int iter = 1; iter <= nIters; iter++) {
 
     // "half kick"
+    for (i = 0; i < nBodies; i++) {
+      r[i].vx = r[i].vx + (r[i].ax * dt / 2);
+      r[i].vy = r[i].vy + (r[i].ay * dt / 2);
+    }
         
-    // "drift" 
+    // "drift"
+    for (i = 0; i < nBodies; i++) {
+      r[i].x = r[i].x + (r[i].vx * dt / 2);
+      r[i].y = r[i].y + (r[i].vy * dt / 2);
+    }
 
     // update acceleration
+    // compute new force matrix
 
     // "half kick"
+    for (i = 0; i < nBodies; i++) {
+      r[i].vx = r[i].vx + (r[i].ax * dt / 2);
+      r[i].vy = r[i].vy + (r[i].ay * dt / 2);
+    }
 
     // record the position and velocity
 
@@ -181,5 +197,58 @@ void total_energy(Body *r, Energy *e, int n){
 
 void bodyAcc(Body *r, double dt, int n) {
   // F = G*sum_{i,j} m_i*m_j*(r_j-r_i)/||r_j-r_i||^3
-  // F = m*a thus a = F/m 
+  // F = m*a thus a = F/m // constructing initial force matrices (need 2 for 2 dimensions)
+  double f_x[n][n]; // forces in x direction
+  double f_y[n][n]; // forces in y direction
+
+  // initializing all values to 0
+  for (int i = 0; i < n; i++) {
+    for (int j = 0; j < n; j++) {
+      f_x[i][j] = 0.0;
+      f_y[i][j] = 0.0;
+    }
+  }
+
+  for (int i = 0; i < n; i++) {
+    for (int j = i + 1; j < n; j++) {
+      double dx = r[i].x - r[j].x;
+      double dy = r[i].y - r[j].y;
+      // printf("dxdx + dydy = %f,%f ... %f\n", dx*dx, dy*dy, SOFT);
+      double d = sqrtf((dx * dx) + (dy * dy) + SOFT); // SOFT added to avoid divide by 0
+      double d3 = d * d * d;
+      f_x[i][j] = -G * r[i].m * r[j].m * (r[i].x - r[j].x) / d3;
+      f_y[i][j] = -G * r[i].m * r[j].m * (r[i].y - r[j].y) / d3;
+      f_x[j][i] = -f_x[i][j];
+      f_y[j][i] = -f_y[i][j]; // using symmetry of force matrix (Newton's law)
+    }
+  }
+  printf("Forces in x direction:\n");
+  print_arr(f_x, n, n);
+  printf("Forces in y direction:\n");
+  print_arr(f_y, n, n);  
+
+  // calculate initial acceleration from force matrices
+  for (int i = 0; i < n; i++) {
+    double Fx = 0.0, Fy = 0.0;
+    for (int j = 0; j < n; j++) {
+      Fx += f_x[i][j];
+      Fy += f_y[i][j];
+    }
+    // printf("Force for particle %d: (%f, %f)\n", i, Fx, Fy);
+    // Using F = m * a, a = F / m
+    r[i].ax = Fx / r[i].m;
+    r[i].ay = Fy / r[i].m;
+  }
+}
+
+// print out a 2d array
+void print_arr(double arr[NUM_BODY][NUM_BODY], int rows, int cols) {
+  int i, j;
+  for (i = 0; i < rows; i++) {
+    for (j = 0; j < cols; j++) {
+      printf("%f ", arr[i][j]);
+    }
+    printf("\n");
+  }
+  printf("\n");
 }
