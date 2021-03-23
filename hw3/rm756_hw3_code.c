@@ -201,31 +201,31 @@ int main(const int argc, const char** argv) {
   }
   
   totalTime = omp_get_wtime() - totalTime;
-  printf("Total time for %d particles and %d threads = %f\n", nBodies, p, totalTime);
+  printf("Total time for %d particles and %d threads = %f\n\n", nBodies, p, totalTime);
   free(Bbuf); free(Ebuf);
   //   }
   // }
   fclose(tp); fclose(pvp);
   
-  FILE *fp = NULL;          // script for gnuplot which generates
-                              // eps graph of timings
-  /* Create one way pipe line with call to popen() */
-  if (( fp = popen("gnuplot plot_nbody.gp", "w")) == NULL)
-  {
-    perror("popen");
-    exit(1);
-  }
-  /* Close the pipe */
-  pclose(fp); 
+  // FILE *fp = NULL;          // script for gnuplot which generates
+  //                             // eps graph of timings
+  // /* Create one way pipe line with call to popen() */
+  // if (( fp = popen("gnuplot plot_nbody.gp", "w")) == NULL)
+  // {
+  //   perror("popen");
+  //   exit(1);
+  // }
+  // /* Close the pipe */
+  // pclose(fp); 
 
-  /* on Mac only */
-  FILE *fpo = NULL;
-  if (( fpo = popen("open plot_nbody.eps", "w")) == NULL)
-  {
-    perror("popen");
-    exit(1);
-  }
-  pclose(fpo);
+  // /* on Mac only */
+  // FILE *fpo = NULL;
+  // if (( fpo = popen("open plot_nbody.eps", "w")) == NULL)
+  // {
+  //   perror("popen");
+  //   exit(1);
+  // }
+  // pclose(fpo);
 
   return(0);
 
