@@ -26,8 +26,8 @@
 #define DIM 2       /* 2 or 3 dimensions                     */
 #define MIN_THRS 1
 #define MAX_THRS 8
-#define MIN_N 400
-#define MAX_N 401
+#define MIN_N 1000
+#define MAX_N 1001
 #define NUM_ITERS 1000
 
 // position (x,y), velocity (vx,vy), acceleration (ax,ay), mass 
@@ -102,18 +102,18 @@ int main(const int argc, const char** argv) {
       /******************** Main loop over iterations **************/
       omp_set_num_threads(p);
       for (int iter = 1; iter <= nIters; iter++) {
-        // #pragma omp parallel shared(F_x, F_y) private(i, j)
-        // {
+        #pragma omp parallel shared(F_x, F_y) private(i, j)
+        {
           int i = 0, j = 0;
           // "half kick"
-          // #pragma omp for
+          #pragma omp for
           for (i = 0; i < nBodies; i++) {
             r[i].vx = r[i].vx + (r[i].ax * dt / 2);
             r[i].vy = r[i].vy + (r[i].ay * dt / 2);
           }
               
           // "drift"
-          // #pragma omp for schedule(dynamic)
+          #pragma omp for schedule(auto) 
           for (i = 0; i < nBodies; i++) {
             r[i].x = r[i].x + (r[i].vx * dt / 2);
             r[i].y = r[i].y + (r[i].vy * dt / 2);
@@ -124,14 +124,14 @@ int main(const int argc, const char** argv) {
           double F_yloc[nBodies];
 
           // initial force arrays to 0
-          // #pragma omp for schedule(dynamic)
+          #pragma omp for schedule(auto) 
           for (int i = 0; i < nBodies; i++) {
             F_xloc[i] = 0.0;
             F_yloc[i] = 0.0;
           }
 
           // calculate force on each particle
-          // #pragma omp for schedule(dynamic) // argue why cyclic is better
+          #pragma omp for schedule(auto)  // argue why cyclic is better
           for (int i = 0; i < nBodies; i++) {
             F_x[i] = 0.0;
             F_y[i] = 0.0;
@@ -152,7 +152,7 @@ int main(const int argc, const char** argv) {
           }
 
           // accumulate local forces into total force array
-          // #pragma omp for schedule(dynamic)
+          #pragma omp for schedule(auto) 
           for (int i = 0; i < nBodies; i++) {
             for (int t = 0; t < p; t++) {
               if (omp_get_thread_num() == t) {
@@ -163,7 +163,7 @@ int main(const int argc, const char** argv) {
           }
 
           // calculate acceleration from force matrices
-          // #pragma omp for schedule(dynamic)
+          #pragma omp for schedule(auto) 
           for (int i = 0; i < nBodies; i++) {
             // Using F = m * a, a = F / m
             r[i].ax = F_x[i] / r[i].m;
@@ -171,12 +171,12 @@ int main(const int argc, const char** argv) {
           }
 
           // "half kick"
-          // #pragma omp for schedule(dynamic)
+          #pragma omp for schedule(auto) 
           for (i = 0; i < nBodies; i++) {
             r[i].vx = r[i].vx + (r[i].ax * dt / 2);
             r[i].vy = r[i].vy + (r[i].ay * dt / 2);
           }
-        // }
+        }
 
         // serial section
         // record the position and velocity

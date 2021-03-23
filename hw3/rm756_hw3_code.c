@@ -10,10 +10,11 @@
 
 // compile: gcc -std=gnu99 -O3 -o rm756_hw3_code rm756_hw3_code.c -fopenmp -lm
 // debug: gcc -std=gnu99 -O0 -o rm756_hw3_code rm756_hw3_code.c -fopenmp -lm -g
-// run: ./rm756_hw3_code
+// run: ./rm756_hw3_code num_bodies num_threads
 
 #define SOFT 1e-2f
-#define NUM_BODY 500 /* the number of bodies                  */
+#define NUM_BODY 50 /* the number of bodies                  */
+#define NUM_THRS 1
 #define MAX_X 90    /* the positions (x_i,y_i) are random    */
 #define MAX_Y 50 
 #define MIN_X 1     /* between MIN and MAX position          */
@@ -24,7 +25,11 @@
 #define MIN_V 0     /* between MIN and MAX velocity          */
 #define G 0.1       /* gravitational constant                */
 #define DIM 2       /* 2 or 3 dimensions                     */
-#define NUM_THREADS 32
+#define MIN_THRS 1
+#define MAX_THRS 8
+#define MIN_N 1000
+#define MAX_N 1001
+#define NUM_ITERS 1000
 
 // position (x,y), velocity (vx,vy), acceleration (ax,ay), mass 
 typedef struct { double x, y, vx, vy, ax, ay, m; } Body;
@@ -46,11 +51,18 @@ int main(const int argc, const char** argv) {
   // file to record energy (to check for correctness)
   FILE *tp = NULL;            
   tp = fopen("plot_nbody.csv", "w");
-  
-  // int i, j;
-  int nBodies = NUM_BODY;
-  // nBodies = atoi(argv[1]);
-  int p = NUM_THREADS;
+
+  // for (int nBodies = MIN_N; nBodies < MAX_N; nBodies = nBodies * 2) {
+  //   for (int p = MIN_THRS; p <= MAX_THRS; p = p*2) {
+  //     if (p > 10) {
+  //       p = 10; // p should have value 1, 2, 4, 8, 10
+  //     }
+  int i, j;
+  // int nBodies = NUM_BODY;
+  int nBodies = atoi(argv[1]);
+  int p = atoi(argv[2]);
+  // int p = NUM_THREADS;
+  // printf("%d, %d\n\n", nBodies, p);
 
   const double dt = 0.01f; // time step
   const int nIters = 1000;  // simulation iterations
@@ -79,63 +91,54 @@ int main(const int argc, const char** argv) {
   // }
   /******************** (2) Get total energy *********************/
   total_energy(r, e, nBodies);
-  // printf("%f\n", e->ke);
 
   /******************** (3) Initial acceleration *****************/
   bodyAcc(r, dt, nBodies);
 
-  // force matrices (two needed for two dimensions)
-  // double f_x[nBodies][nBodies]; // forces in x direction
-  // double f_y[nBodies][nBodies]; // forces in y direction
   double F_x[nBodies];
   double F_y[nBodies];
-
-  double dx, dy, d, d3; // used for calculating distances between particles
-
-  // initializing all values to 0
-  // for (int i = 0; i < nBodies; i++) {
-  //   for (int j = 0; j < nBodies; j++) {
-  //     f_x[i][j] = 0.0;
-  //     f_y[i][j] = 0.0;
-  //   }
-  // }        
 
   totalTime = omp_get_wtime();
 
   /******************** Main loop over iterations **************/
+  omp_set_num_threads(p);
+
+  // local copies of force arrays (first index is for thread id)
+  double F_xloc[p][nBodies];
+  double F_yloc[p][nBodies];
+  int t_id;
+
   for (int iter = 1; iter <= nIters; iter++) {
-    #pragma omp parallel num_threads(p) shared(F_x, F_y) private(i, j, F_xloc, F_yloc)
+    #pragma omp parallel shared(F_x, F_y, F_xloc, F_yloc, r) private(i, j, t_id)
     {
+      double dx, dy, d, d3; // used for calculating distances between particles
+      t_id = omp_get_thread_num();
       int i = 0, j = 0;
-      // "half kick"
-      #pragma omp for
+      // "half kick"s
+      #pragma omp for schedule(auto)
       for (i = 0; i < nBodies; i++) {
         r[i].vx = r[i].vx + (r[i].ax * dt / 2);
         r[i].vy = r[i].vy + (r[i].ay * dt / 2);
       }
           
       // "drift"
-      #pragma omp for
+      #pragma omp for schedule(auto) 
       for (i = 0; i < nBodies; i++) {
         r[i].x = r[i].x + (r[i].vx * dt / 2);
         r[i].y = r[i].y + (r[i].vy * dt / 2);
       }
 
       // update acceleration
-      double F_xloc[nBodies]; // local copies of force arrays
-      double F_yloc[nBodies];
 
-      // initial force arrays to 0
-      #pragma omp for
+      // each thread initializes its local force array to 0
+      #pragma omp for schedule(auto) 
       for (int i = 0; i < nBodies; i++) {
-        F_x[i] = 0.0;
-        F_y[i] = 0.0;
-        F_xloc[i] = 0.0;
-        F_yloc[i] = 0.0;
+        F_xloc[t_id][i] = 0.0;
+        F_yloc[t_id][i] = 0.0;
       }
 
       // calculate force on each particle
-      #pragma omp for
+      #pragma omp for schedule(auto)
       for (int i = 0; i < nBodies; i++) {
         for (int j = i + 1; j < nBodies; j++) {
           dx = r[i].x - r[j].x;
@@ -145,16 +148,27 @@ int main(const int argc, const char** argv) {
           d3 = d * d * d;
           double f_xij = -G * r[i].m * r[j].m * (r[i].x - r[j].x) / d3;
           double f_yij = -G * r[i].m * r[j].m * (r[i].y - r[j].y) / d3;
-          F_x[i] += f_xij;
-          F_y[i] += f_yij;
+          F_xloc[t_id][i] += f_xij;
+          F_yloc[t_id][i] += f_yij;
           // using symmetry from Newton's laws
-          F_x[j] -= f_xij;
-          F_y[j] -= f_yij;
+          F_xloc[t_id][j] -= f_xij;
+          F_yloc[t_id][j] -= f_yij;
+        }
+      }
+
+      // accumulate local forces into total force array
+      #pragma omp for schedule(auto) 
+      for (int i = 0; i < nBodies; i++) {
+        F_x[i] = 0.0;
+        F_y[i] = 0.0;
+        for (int t = 0; t < p; t++) {
+          F_x[i] += F_xloc[t_id][i];
+          F_x[i] += F_xloc[t_id][i];
         }
       }
 
       // calculate acceleration from force matrices
-      #pragma omp for
+      #pragma omp for schedule(auto) 
       for (int i = 0; i < nBodies; i++) {
         // Using F = m * a, a = F / m
         r[i].ax = F_x[i] / r[i].m;
@@ -162,7 +176,7 @@ int main(const int argc, const char** argv) {
       }
 
       // "half kick"
-      #pragma omp for
+      #pragma omp for schedule(auto) 
       for (i = 0; i < nBodies; i++) {
         r[i].vx = r[i].vx + (r[i].ax * dt / 2);
         r[i].vy = r[i].vy + (r[i].ay * dt / 2);
@@ -179,16 +193,18 @@ int main(const int argc, const char** argv) {
     // sanity check
     total_energy(r, e, nBodies);
     // printf("%f + %f = %f\n", e->pe, e->ke, e->pe - e->ke);
-    if (iter%10 == 0){
+    if (iter%100 == 0){
+      // printf("%f + %f = %f\n", e->pe, e->ke, e->pe - e->ke);
       fprintf(tp,"%4d %10.3e %10.3e %10.3e\n",
-             iter,(*e).pe,(*e).ke, (*e).pe-(*e).ke);
+            iter,(*e).pe,(*e).ke, (*e).pe-(*e).ke);
     }
   }
   
   totalTime = omp_get_wtime() - totalTime;
-  printf("Total time = %f\n", totalTime);
-
+  printf("Total time for %d particles and %d threads = %f\n", nBodies, p, totalTime);
   free(Bbuf); free(Ebuf);
+  //   }
+  // }
   fclose(tp); fclose(pvp);
   
   FILE *fp = NULL;          // script for gnuplot which generates
@@ -274,15 +290,13 @@ void bodyAcc(Body *r, double dt, int n) {
   // F = G*sum_{i,j} m_i*m_j*(r_j-r_i)/||r_j-r_i||^3
   // F = m*a thus a = F/m 
   // constructing force matrices (need 2 for 2 dimensions)
-  double f_x[n][n]; // forces in x direction
-  double f_y[n][n]; // forces in y direction
+  double F_x[n]; // forces in x direction
+  double F_y[n]; // forces in y direction
 
   // initializing all values to 0
   for (int i = 0; i < n; i++) {
-    for (int j = 0; j < n; j++) {
-      f_x[i][j] = 0.0;
-      f_y[i][j] = 0.0;
-    }
+    F_x[i] = 0.0;
+    F_y[i] = 0.0;
   }
 
   for (int i = 0; i < n; i++) {
@@ -292,10 +306,12 @@ void bodyAcc(Body *r, double dt, int n) {
       // printf("dxdx + dydy = %f,%f ... %f\n", dx*dx, dy*dy, SOFT);
       double d = sqrtf((dx * dx) + (dy * dy) + SOFT); // SOFT added to avoid divide by 0
       double d3 = d * d * d;
-      f_x[i][j] = -G * r[i].m * r[j].m * (r[i].x - r[j].x) / d3;
-      f_y[i][j] = -G * r[i].m * r[j].m * (r[i].y - r[j].y) / d3;
-      f_x[j][i] = -f_x[i][j];
-      f_y[j][i] = -f_y[i][j]; // using symmetry of force matrix (Newton's law)
+      double f_xij = -G * r[i].m * r[j].m * (r[i].x - r[j].x) / d3;
+      double f_yij = -G * r[i].m * r[j].m * (r[i].y - r[j].y) / d3;
+      F_x[i] += f_xij;
+      F_y[i] += f_yij;
+      F_x[j] -= f_xij;
+      F_y[j] -= f_yij;
     }
   }
   // printf("Forces in x direction:\n");
@@ -305,15 +321,10 @@ void bodyAcc(Body *r, double dt, int n) {
 
   // calculate initial acceleration from force matrices
   for (int i = 0; i < n; i++) {
-    double Fx = 0.0, Fy = 0.0;
-    for (int j = 0; j < n; j++) {
-      Fx += f_x[i][j];
-      Fy += f_y[i][j];
-    }
     // printf("Force for particle %d: (%f, %f)\n", i, Fx, Fy);
     // Using F = m * a, a = F / m
-    r[i].ax = Fx / r[i].m;
-    r[i].ay = Fy / r[i].m;
+    r[i].ax = F_x[i] / r[i].m;
+    r[i].ay = F_y[i] / r[i].m;
   }
 }
 
