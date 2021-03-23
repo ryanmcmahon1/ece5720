@@ -148,10 +148,12 @@ int main(const int argc, const char** argv) {
     }
 
     // record the position and velocity
-    printf("\nIteration %d\n", iter);
-    for (i = 0; i < nBodies; i++) {
-      printf("Position for particle %d: (%f, %f)\n", i, r[i].x, r[i].y);
-    }
+    // printf("\nIteration %d\n", iter);
+    // for (i = 0; i < nBodies; i++) {
+    //   printf("Position for particle %d: (%f, %f)\n", i, r[i].x, r[i].y);
+    // }
+
+    
 
     // sanity check
     total_energy(r, e, nBodies);
