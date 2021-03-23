@@ -85,20 +85,18 @@ int main(const int argc, const char** argv) {
   bodyAcc(r, dt, nBodies);
 
   // force matrices (two needed for two dimensions)
-  // double f_x[nBodies][nBodies]; // forces in x direction
-  // double f_y[nBodies][nBodies]; // forces in y direction
-  double F_x[nBodies];
-  double F_y[nBodies];
+  double f_x[nBodies][nBodies]; // forces in x direction
+  double f_y[nBodies][nBodies]; // forces in y direction
 
   double dx, dy, d, d3; // used for computing force m
 
   // initializing all values to 0
-  // for (int i = 0; i < nBodies; i++) {
-  //   for (int j = 0; j < nBodies; j++) {
-  //     f_x[i][j] = 0.0;
-  //     f_y[i][j] = 0.0;
-  //   }
-  // }        
+  for (int i = 0; i < nBodies; i++) {
+    for (int j = 0; j < nBodies; j++) {
+      f_x[i][j] = 0.0;
+      f_y[i][j] = 0.0;
+    }
+  }        
 
   totalTime = omp_get_wtime();
 
