@@ -124,8 +124,8 @@ int main(const int argc, const char** argv) {
       // "drift"
       #pragma omp for schedule(auto) 
       for (i = 0; i < nBodies; i++) {
-        r[i].x = r[i].x + (r[i].vx * dt / 2);
-        r[i].y = r[i].y + (r[i].vy * dt / 2);
+        r[i].x = r[i].x + (r[i].vx * dt);
+        r[i].y = r[i].y + (r[i].vy * dt);
       }
 
       // update acceleration
